@@ -3,3 +3,7 @@ pandas
 numpy
 plotly
 openpyxl
+reportlab
+io
+smtplib
+email 

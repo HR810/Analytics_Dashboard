@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import re
+from mail import generate_pdf_report,send_email_report
 
 st.set_page_config(layout="wide")
 
@@ -52,18 +53,37 @@ def load_data(file):
 
             row_dict = dict(zip(columns, row.tolist()))
 
-            assignee = row_dict.get("Assignee")
+            assignee_raw = row_dict.get("Assignee")
             effort = pd.to_numeric(row_dict.get("Effort"), errors="coerce")
 
-            if pd.notna(assignee) and str(assignee).strip() != "" and pd.notna(effort):
-                final_rows.append({
-                    "Ticket Number": row_dict.get("Ticket Number"),
-                    "Assignee": str(assignee).strip(),
-                    "Effort": effort,
-                    "Month": current_month,
-                    "Week": current_week,
-                    "Client": sheet_name
-                })
+            if pd.notna(assignee_raw) and str(assignee_raw).strip() != "" and pd.notna(effort):
+
+                # Convert to string and clean
+                assignee_raw = str(assignee_raw).strip()
+
+                # Split multiple names (/, comma)
+                assignee_list = re.split(r'[\/,]', assignee_raw)
+
+                for name in assignee_list:
+
+                    name = name.strip()
+                    if not name:
+                        continue
+
+                    # Take first word only
+                    first_name = name.split()[0]
+
+                    # Standardize case (vinay -> Vinay)
+                    first_name = first_name.lower().capitalize()
+
+                    final_rows.append({
+                        "Ticket Number": row_dict.get("Ticket Number"),
+                        "Assignee": first_name,
+                        "Effort": effort,
+                        "Month": current_month,
+                        "Week": current_week,
+                        "Client": sheet_name
+                    })
 
     final_df = pd.DataFrame(final_rows)
 
@@ -184,10 +204,15 @@ if uploaded_file:
         monthly_assignee,
         x="Effort",
         y="Assignee",
-        orientation="h"
+        orientation="h",
+        color="Assignee",
+        color_discrete_sequence=px.colors.qualitative.Set2
     )
 
-    fig_bar.update_layout(yaxis={'categoryorder': 'total ascending'})
+    fig_bar.update_layout(
+        yaxis={'categoryorder': 'total ascending'},
+        showlegend=False
+    )
 
     st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -227,7 +252,8 @@ if uploaded_file:
         x="Time_Label",
         y="Effort",
         color="Client",
-        markers=True
+        markers=True,
+        color_discrete_sequence=px.colors.qualitative.Bold
     )
 
     fig_line.update_layout(
@@ -262,7 +288,8 @@ if uploaded_file:
     fig_heatmap = px.imshow(
         pivot,
         aspect="auto",
-        labels=dict(color="Effort")
+        labels=dict(color="Effort"),
+        color_continuous_scale="Viridis"
     )
 
     st.plotly_chart(fig_heatmap, use_container_width=True)
@@ -273,3 +300,60 @@ if uploaded_file:
 
     st.subheader("Filtered Data")
     st.dataframe(filtered_df, use_container_width=True)
+
+    st.divider()
+    st.subheader("📧 Email Report")
+
+    receiver_email = st.text_input("Enter recipient email address")
+
+    if st.button("Generate & Send Report"):
+        if not receiver_email:
+            st.error("Please enter a valid email address.")
+        else:
+            with st.spinner("Generating report..."):
+                kpis = {
+                    "effort": int(filtered_df["Effort"].sum()),
+                    "tickets": filtered_df["Ticket Number"].nunique(),
+                    "assignees": filtered_df["Assignee"].nunique()
+                }
+
+                pdf_buffer = generate_pdf_report(
+                    fig_bar,
+                    fig_line,
+                    fig_heatmap,
+                    kpis,
+                    clients,
+                    assignees,
+                    months,
+                    selected_weeks
+                )
+                send_email_report(receiver_email, pdf_buffer)
+
+            st.success("Report sent successfully!")
+
+def normalize_first_name(raw_assignee):
+
+    if pd.isna(raw_assignee):
+        return []
+
+    raw_assignee = str(raw_assignee).strip()
+
+    # Split multiple names (/, comma)
+    names = re.split(r'[\/,]', raw_assignee)
+
+    cleaned = []
+
+    for name in names:
+        name = name.strip()
+        if not name:
+            continue
+
+        # Take first word only
+        first_name = name.split()[0]
+
+        # Standardize case
+        first_name = first_name.lower().capitalize()
+
+        cleaned.append(first_name)
+
+    return cleaned
