@@ -4,7 +4,6 @@ import numpy as np
 import plotly.express as px
 import re
 from mail import generate_pdf_report,send_email_report
-from streamlit_plotly_events import plotly_events
 
 st.set_page_config(layout="wide")
 
