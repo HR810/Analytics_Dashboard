@@ -66,4 +66,6 @@ urllib3==2.6.3
 watchdog==6.0.0
 weasyprint==68.1
 webencodings==0.5.1
+
 zopfli==0.4.1
+kaleido
