@@ -4,6 +4,7 @@ import numpy as np
 import plotly.express as px
 import re
 from mail import generate_pdf_report,send_email_report
+from streamlit_plotly_events import plotly_events
 
 st.set_page_config(layout="wide")
 
@@ -206,15 +207,102 @@ if uploaded_file:
         y="Assignee",
         orientation="h",
         color="Assignee",
+        text="Effort",  # 👈 ADD THIS
         color_discrete_sequence=px.colors.qualitative.Set2
+    )
+
+    fig_bar.update_traces(
+        textposition="outside",  # shows value at end of bar
+        textfont_size=12
     )
 
     fig_bar.update_layout(
         yaxis={'categoryorder': 'total ascending'},
-        showlegend=False
+        showlegend=False,
+        margin=dict(l=80, r=40, t=40, b=40)
     )
 
     st.plotly_chart(fig_bar, use_container_width=True)
+
+    # ======================================================
+    # MONTHLY TOTAL EFFORT PER CLIENT
+    # ======================================================
+
+    st.subheader("Monthly Total Effort per Client")
+
+    monthly_client = (
+        filtered_df
+        .groupby(["Month", "Month_Num", "Client"], as_index=False)
+        .agg({"Effort": "sum"})
+        .sort_values("Month_Num")
+    )
+
+    # Ensure chronological month ordering
+    month_order_sorted = (
+        monthly_client[["Month", "Month_Num"]]
+        .drop_duplicates()
+        .sort_values("Month_Num")["Month"]
+        .tolist()
+    )
+
+    monthly_client["Month"] = pd.Categorical(
+        monthly_client["Month"],
+        categories=month_order_sorted,
+        ordered=True
+    )
+
+    fig_month_client = px.bar(
+        monthly_client,
+        x="Month",
+        y="Effort",
+        color="Client",
+        barmode="group",
+        text="Effort",  # 👈 ADD THIS
+        color_discrete_sequence=px.colors.qualitative.Bold
+    )
+
+    fig_month_client.update_traces(
+        textposition="outside",
+        textfont_size=11
+    )
+
+    fig_month_client.update_layout(
+        xaxis_title="Month",
+        yaxis_title="Effort",
+        margin=dict(l=60, r=40, t=40, b=40)
+    )
+
+    st.plotly_chart(fig_month_client, use_container_width=True)
+
+    # ======================================================
+    # CLIENT BREAKDOWN FOR SINGLE ASSIGNEE
+    # ======================================================
+
+    if len(assignees) == 1 and len(clients) > 1:
+        st.subheader(f"Client-wise Effort Distribution for {assignees[0]}")
+
+        assignee_client = (
+            filtered_df
+            .groupby("Client", as_index=False)
+            .agg({"Effort": "sum"})
+            .sort_values("Effort", ascending=False)
+        )
+
+        fig_assignee_client = px.bar(
+            assignee_client,
+            x="Effort",
+            y="Client",
+            orientation="h",
+            color="Client",
+            color_discrete_sequence=px.colors.qualitative.Set3
+        )
+
+        fig_assignee_client.update_layout(
+            showlegend=False,
+            yaxis={'categoryorder': 'total ascending'}
+        )
+
+        st.plotly_chart(fig_assignee_client, use_container_width=True)
 
     # ======================================================
     # WEEKLY TREND PER CLIENT
@@ -319,13 +407,15 @@ if uploaded_file:
 
                 pdf_buffer = generate_pdf_report(
                     fig_bar,
+                    fig_month_client,
                     fig_line,
                     fig_heatmap,
                     kpis,
                     clients,
                     assignees,
                     months,
-                    selected_weeks
+                    selected_weeks,
+                    filtered_df  # 👈 pass dataframe
                 )
                 send_email_report(receiver_email, pdf_buffer)
 
