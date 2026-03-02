@@ -21,7 +21,6 @@ iniconfig==2.3.0
 Jinja2==3.1.6
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
-kaleido==1.2.0
 kiwisolver==1.4.9
 logistro==2.0.1
 MarkupSafe==3.0.3
@@ -68,3 +67,4 @@ weasyprint==68.1
 webencodings==0.5.1
 kaleido==0.2.1
 zopfli==0.4.1
+
